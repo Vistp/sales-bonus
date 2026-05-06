@@ -53,13 +53,18 @@ function calculateBonusByProfit(index, total, seller) {
  */
 function analyzeSalesData(data, options) {
     // @TODO: Проверка входных данных
-    if (!data) {
-        return [];
+     if (!data ||
+        !Array.isArray(data.sellers) || data.sellers.length === 0 ||
+        !Array.isArray(data.products) || data.products.length === 0 ||
+        !Array.isArray(data.purchase_records) || data.purchase_records.length === 0) {
+        throw new Error("Ошибка: отсутствуют данные");
     }
 
     // @TODO: Проверка наличия опций
-    if (!options || !options.calculateRevenue || !options.calculateBonus) {
-        return [];
+    if (!options ||
+        typeof options.calculateRevenue !== 'function' ||
+        typeof options.calculateBonus !== 'function') {
+        throw new Error("Ошибка: отсутствуют функции для расчетов");
     }
     const { calculateRevenue, calculateBonus } = options;
 
