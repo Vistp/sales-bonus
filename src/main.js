@@ -11,7 +11,7 @@ function calculateSimpleRevenue(purchase, _product) {
     // Полная стоимость
     const totalFullPrice = sale_price * quantity;
     // Итоговая стоимость (без скидки)
-   const revenue = totalFullPrice * (1 - decimalDiscount);
+    const revenue = totalFullPrice * (1 - decimalDiscount);
 
    return revenue;
 }
@@ -53,18 +53,63 @@ function calculateBonusByProfit(index, total, seller) {
  */
 function analyzeSalesData(data, options) {
     // @TODO: Проверка входных данных
+    if (!data) {
+        return [];
+    }
 
     // @TODO: Проверка наличия опций
+    if (!options || !options.calculateRevenue || !options.calculateBonus) {
+        return [];
+    }
+    const { calculateRevenue, calculateBonus } = options;
 
     // @TODO: Подготовка промежуточных данных для сбора статистики
 
     // @TODO: Индексация продавцов и товаров для быстрого доступа
+    const productsById = data.products.reduce((acc, el) => {
+        acc[el.id] = el;
+        return acc;
+    }, {});
 
     // @TODO: Расчет выручки и прибыли для каждого продавца
+    // TODO: переименовать элементы el после работы с data
+    const sellersPerformance = data.sellers.map(el => {
+        let totalProfit = 0;
+        let totalRevenue = 0;
+
+        const sellerRecords = data.purchase_records.filter(record => record.seller_id === el.id);
+
+        sellerRecords.forEach(record => {
+            record.items.forEach(item => {
+                const product = productsById[item.product_id];
+                // console.log('itemCost', product);
+
+                const itemRevenue = calculateRevenue(item, product);
+                const itemCost = (product ? product.purchase_price : 0) * item.quantity;
+
+                totalRevenue += itemRevenue;
+                totalProfit += (itemRevenue - itemCost);
+            });
+        });
+
+        // console.log('один продавец', el);
+        return {
+            seller_id: el.id,
+            name: el.first_name,
+            profit: totalProfit,
+            revenue: totalRevenue
+        };
+    });
 
     // @TODO: Сортировка продавцов по прибыли
+    const rankedSellers = sellersPerformance.toSorted((a, b) => b.profit - a.profit);
 
     // @TODO: Назначение премий на основе ранжирования
-
     // @TODO: Подготовка итоговой коллекции с нужными полями
+    const finalReport = rankedSellers.map((seller, index) => ({
+        ...seller,
+        bonus: calculateBonus(index, rankedSellers.length, seller)
+    }));
+
+    return finalReport;
 }
