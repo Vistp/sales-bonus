@@ -64,9 +64,13 @@ function analyzeSalesData(data, options) {
     const { calculateRevenue, calculateBonus } = options;
 
     // @TODO: Подготовка промежуточных данных для сбора статистики
-
     // @TODO: Индексация продавцов и товаров для быстрого доступа
     const productsById = data.products.reduce((acc, el) => {
+        acc[el.id] = el;
+        return acc;
+    }, {});
+
+    const sellersById = data.sellers.reduce((acc, el) => {
         acc[el.id] = el;
         return acc;
     }, {});
@@ -76,6 +80,8 @@ function analyzeSalesData(data, options) {
     const sellersPerformance = data.sellers.map(el => {
         let totalProfit = 0;
         let totalRevenue = 0;
+        let sales_count = 0;
+        let products_sold = {};
 
         const sellerRecords = data.purchase_records.filter(record => record.seller_id === el.id);
 
@@ -89,15 +95,23 @@ function analyzeSalesData(data, options) {
 
                 totalRevenue += itemRevenue;
                 totalProfit += (itemRevenue - itemCost);
+                sales_count += item.quantity;
+
+                if (product) {
+                    const sku = product.sku;
+                    products_sold[sku] = (products_sold[sku] || 0) + item.quantity;
+                }
             });
         });
 
         // console.log('один продавец', el);
         return {
             seller_id: el.id,
-            name: el.first_name,
+            name: `${el.first_name} ${el.last_name}`,
             profit: totalProfit,
-            revenue: totalRevenue
+            revenue: totalRevenue,
+            sales_count,
+            products_sold,
         };
     });
 
