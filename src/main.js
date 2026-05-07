@@ -69,66 +69,67 @@ function analyzeSalesData(data, options) {
     const { calculateRevenue, calculateBonus } = options;
 
     // @TODO: Подготовка промежуточных данных для сбора статистики
-    // @TODO: Индексация продавцов и товаров для быстрого доступа
-    const productsById = data.products.reduce((acc, el) => {
-        acc[el.id] = el;
-        return acc;
-    }, {});
+    const sellerStats = data.sellers.map(seller => ({
+        id: seller.id,
+        name: `${seller.first_name} ${seller.last_name}`,
+        profit: 0,
+        revenue: 0,
+        sales_count: 0,
+        products_sold: {},
+    }));
 
-    const sellersById = data.sellers.reduce((acc, el) => {
-        acc[el.id] = el;
-        return acc;
-    }, {});
+    // @TODO: Индексация продавцов и товаров для быстрого доступа
+    const sellerIndex = Object.fromEntries(sellerStats.map(item => [item.id, item]));
+    const productIndex = Object.fromEntries(data.products.map(item => [item.sku, item]));
 
     // @TODO: Расчет выручки и прибыли для каждого продавца
-    // TODO: переименовать элементы el после работы с data
-    const sellersPerformance = data.sellers.map(el => {
-        let totalProfit = 0;
-        let totalRevenue = 0;
-        let sales_count = 0;
-        let products_sold = {};
+    data.purchase_records.forEach(record => {
+        const seller = sellerIndex[record.seller_id];
 
-        const sellerRecords = data.purchase_records.filter(record => record.seller_id === el.id);
+        if (seller) {
+            seller.sales_count += 1;
+            seller.revenue += record.total_amount;
 
-        sellerRecords.forEach(record => {
             record.items.forEach(item => {
-                const product = productsById[item.product_id];
-                // console.log('itemCost', product);
-
-                const itemRevenue = calculateRevenue(item, product);
-                const itemCost = (product ? product.purchase_price : 0) * item.quantity;
-
-                totalRevenue += itemRevenue;
-                totalProfit += (itemRevenue - itemCost);
-                sales_count += item.quantity;
+                const product = productIndex[item.sku];
 
                 if (product) {
-                    const sku = product.sku;
-                    products_sold[sku] = (products_sold[sku] || 0) + item.quantity;
+                    const cost = product.purchase_price * item.quantity;
+                    const itemRevenue = calculateRevenue(item, product);
+                    const profit = itemRevenue - cost;
+
+                    seller.profit += profit;
+
+                    if (!seller.products_sold[item.sku]) {
+                        seller.products_sold[item.sku] = 0;
+                    }
+                    seller.products_sold[item.sku] += item.quantity;
                 }
             });
-        });
-
-        // console.log('один продавец', el);
-        return {
-            seller_id: el.id,
-            name: `${el.first_name} ${el.last_name}`,
-            profit: totalProfit,
-            revenue: totalRevenue,
-            sales_count,
-            products_sold,
-        };
+        }
     });
 
     // @TODO: Сортировка продавцов по прибыли
-    const rankedSellers = sellersPerformance.toSorted((a, b) => b.profit - a.profit);
+    sellerStats.sort((a, b) => b.profit - a.profit);
 
     // @TODO: Назначение премий на основе ранжирования
-    // @TODO: Подготовка итоговой коллекции с нужными полями
-    const finalReport = rankedSellers.map((seller, index) => ({
-        ...seller,
-        bonus: calculateBonus(index, rankedSellers.length, seller)
-    }));
+    sellerStats.forEach((seller, index) => {
+        seller.bonus = calculateBonus(index, sellerStats.length, seller);
 
-    return finalReport;
+        seller.top_products = Object.entries(seller.products_sold)
+            .map(([sku, quantity]) => ({ sku, quantity }))
+            .sort((a, b) => b.quantity - a.quantity)
+            .slice(0, 10);
+    });
+
+    // @TODO: Подготовка итоговой коллекции с нужными полями
+    return sellerStats.map(seller => ({
+        seller_id: seller.id,
+        name: seller.name,
+        revenue: +seller.revenue.toFixed(2),
+        profit: +seller.profit.toFixed(2),
+        sales_count: seller.sales_count,
+        top_products: seller.top_products,
+        bonus: +seller.bonus.toFixed(2)
+    }));
 }
